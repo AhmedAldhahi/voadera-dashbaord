@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Search, Download, Calendar, Globe, Loader2, LogOut, Clock } from "lucide-react";
 import type { EmployeeData, SessionData } from "./types";
-import { exportToCSV } from "./utils";
+import { exportToCSV, exportDailyReportToCSV } from "./utils";
 import StatCards from "./components/StatCards";
 import EditProfileModal from "./components/EditProfileModal";
 import WebHistoryModal, { type WebLog } from "./components/WebHistoryModal";
@@ -27,6 +27,7 @@ export default function App() {
   const [timeLogEmployee, setTimeLogEmployee] = useState<EmployeeData | null>(null);
   const [timeLogs, setTimeLogs] = useState<SessionData[]>([]);
   const [loadingTimeLogsFor, setLoadingTimeLogsFor] = useState<number | null>(null);
+  const [loadingReportFor, setLoadingReportFor] = useState<number | null>(null);
 
   const [dateRange, setDateRange] = useState("today");
 
@@ -195,6 +196,24 @@ export default function App() {
       setTimeLogs([]);
     } finally {
       setLoadingTimeLogsFor(null);
+    }
+  };
+
+  const handleDownloadEmployeeReport = async (emp: EmployeeData) => {
+    setLoadingReportFor(emp.id);
+    try {
+      const { start, end } = getDates(dateRange);
+      const res = await authFetch(`${API_BASE}/employees/${emp.id}/daily-report?start=${start}&end=${end}`);
+      if (!res.ok) throw new Error("Failed to fetch daily report");
+      const result = await res.json();
+      if (result.status === "Success") {
+        exportDailyReportToCSV(emp.name, dateRange, result.data);
+      }
+    } catch (err) {
+      console.error("Failed to download employee report:", err);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setLoadingReportFor(null);
     }
   };
 
@@ -416,6 +435,19 @@ export default function App() {
                               <Clock size={13} />
                             )}
                             {loadingTimeLogsFor === emp.id ? "Loading..." : "Time Log"}
+                          </button>
+                          <button
+                            onClick={() => handleDownloadEmployeeReport(emp)}
+                            className="px-3 py-1 text-slate-600 hover:bg-slate-100 rounded-lg transition-all text-xs font-bold uppercase tracking-wider border border-transparent hover:border-slate-200 flex items-center gap-1.5 disabled:opacity-50"
+                            title="Download daily CSV report"
+                            disabled={loadingReportFor === emp.id}
+                          >
+                            {loadingReportFor === emp.id ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Download size={13} />
+                            )}
+                            {loadingReportFor === emp.id ? "Loading..." : "Report"}
                           </button>
                           <button
                             onClick={() => setEditingEmployee(emp)}

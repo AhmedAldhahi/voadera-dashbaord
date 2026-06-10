@@ -7,7 +7,6 @@ import {
   MessageSquare,
   Activity,
   TrendingUp,
-  Clock,
   Play,
   Camera,
   Hash,
@@ -309,10 +308,7 @@ export default function WebHistoryModal({ employeeName, logs, dateRange, onClose
     return Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
   }, [groupedCleanLogs]);
 
-  const firstActive = useMemo(() => {
-    if (sortedRawLogs.length === 0) return "—";
-    return formatTime(sortedRawLogs[0].createdAt);
-  }, [sortedRawLogs]);
+
 
   // ── Group by Hour for the UI Timeline ────────────────────────────────
   const groupedByHour = useMemo(() => {
@@ -388,7 +384,7 @@ export default function WebHistoryModal({ employeeName, logs, dateRange, onClose
         </div>
 
         {/* ── Insight Cards ───────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3 px-6 py-4 border-b border-white/10">
+        <div className="grid grid-cols-2 gap-3 px-6 py-4 border-b border-white/10">
           <div
             className="rounded-xl p-4 transition-all hover:scale-[1.02]"
             style={{
@@ -426,26 +422,6 @@ export default function WebHistoryModal({ employeeName, logs, dateRange, onClose
             </div>
             <p className="text-2xl font-extrabold text-white truncate">
               {topCategory}
-            </p>
-          </div>
-
-          <div
-            className="rounded-xl p-4 transition-all hover:scale-[1.02]"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
-                <Clock size={14} className="text-emerald-400" />
-              </div>
-              <span className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                First Active
-              </span>
-            </div>
-            <p className="text-2xl font-extrabold text-white">
-              {firstActive}
             </p>
           </div>
         </div>

@@ -43,3 +43,28 @@ export function exportToCSV(employees: EmployeeData[], dateRange: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+export function exportDailyReportToCSV(employeeName: string, dateRange: string, dailyData: any[]) {
+  const headers = ["Date", "Total Session Time", "Active Time", "Idle Time", "Longest Break"];
+  const rows = dailyData.map((day) => [
+    day.date,
+    day.totalTime,
+    day.activeTime,
+    day.idleTime,
+    day.longestIdle,
+  ]);
+
+  const csv = [headers, ...rows]
+    .map((row) => row.map((c) => `"${c}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  
+  const safeName = employeeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  a.download = `report-${safeName}-${dateRange}-${new Date().toISOString().split("T")[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
