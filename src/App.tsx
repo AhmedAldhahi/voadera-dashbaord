@@ -77,12 +77,24 @@ export default function App() {
     } else if (range === "week") {
       start.setDate(start.getDate() - 7);
     } else if (range !== "today") {
-      const parts = range.split("-").map(Number);
-      if (parts.length === 3 && !parts.some(isNaN)) {
-        start.setFullYear(parts[0], parts[1] - 1, parts[2]);
-        start.setHours(0, 0, 0, 0);
-        end.setTime(start.getTime());
-        end.setHours(23, 59, 59, 999);
+      if (range.includes("_to_")) {
+        const [startStr, endStr] = range.split("_to_");
+        const sParts = startStr.split("-").map(Number);
+        const eParts = endStr.split("-").map(Number);
+        if (sParts.length === 3 && !sParts.some(isNaN) && eParts.length === 3 && !eParts.some(isNaN)) {
+          start.setFullYear(sParts[0], sParts[1] - 1, sParts[2]);
+          start.setHours(0, 0, 0, 0);
+          end.setFullYear(eParts[0], eParts[1] - 1, eParts[2]);
+          end.setHours(23, 59, 59, 999);
+        }
+      } else {
+        const parts = range.split("-").map(Number);
+        if (parts.length === 3 && !parts.some(isNaN)) {
+          start.setFullYear(parts[0], parts[1] - 1, parts[2]);
+          start.setHours(0, 0, 0, 0);
+          end.setTime(start.getTime());
+          end.setHours(23, 59, 59, 999);
+        }
       }
     }
     return { start: start.toISOString(), end: end.toISOString() };
@@ -261,37 +273,76 @@ export default function App() {
             </button>
 
             {/* Date Selector */}
-            <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200">
-              {["today", "yesterday", "week"].map((range) => (
+            <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200 items-center">
+              {["today", "yesterday", "week"].map((r) => (
                 <button
-                  key={range}
-                  onClick={() => setDateRange(range)}
+                  key={r}
+                  onClick={() => setDateRange(r)}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    dateRange === range
+                    dateRange === r
                       ? "bg-blue-600 text-white shadow-md"
                       : "text-gray-500 hover:bg-gray-50"
                   }`}
                 >
-                  {range.charAt(0).toUpperCase() + range.slice(1)}
+                  {r.charAt(0).toUpperCase() + r.slice(1)}
                 </button>
               ))}
-              <input
-                type="date"
-                onChange={(e) => {
-                  if (e.target.value) setDateRange(e.target.value);
-                }}
-                className={`ml-1 px-2 py-1 rounded-lg text-sm font-semibold transition-all outline-none border-none cursor-pointer ${
-                  dateRange !== "today" && dateRange !== "yesterday" && dateRange !== "week"
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "text-gray-500 hover:bg-gray-50 bg-transparent"
-                }`}
-                title="Pick a specific date"
-                value={
-                  dateRange !== "today" && dateRange !== "yesterday" && dateRange !== "week"
-                    ? dateRange
-                    : ""
-                }
-              />
+
+              <div className="h-6 w-px bg-gray-200 mx-2" />
+              
+              <div className="flex items-center">
+                <input
+                  type="date"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    if (dateRange.includes("_to_")) {
+                      setDateRange(`${val}_to_${dateRange.split("_to_")[1]}`);
+                    } else {
+                      setDateRange(`${val}_to_${val}`);
+                    }
+                  }}
+                  className={`px-2 py-1.5 rounded-lg text-sm font-semibold transition-all outline-none border cursor-pointer ${
+                    (dateRange.includes("_to_") || (!["today", "yesterday", "week"].includes(dateRange)))
+                      ? "bg-blue-50 border-blue-200 text-blue-700"
+                      : "border-transparent text-gray-500 hover:bg-gray-50 bg-transparent"
+                  }`}
+                  title="Start Date"
+                  value={
+                    dateRange.includes("_to_") 
+                      ? dateRange.split("_to_")[0]
+                      : (!["today", "yesterday", "week"].includes(dateRange) ? dateRange : "")
+                  }
+                />
+                
+                <span className="text-gray-400 mx-1 font-bold">→</span>
+
+                <input
+                  type="date"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    if (dateRange.includes("_to_")) {
+                      setDateRange(`${dateRange.split("_to_")[0]}_to_${val}`);
+                    } else if (!["today", "yesterday", "week"].includes(dateRange)) {
+                      setDateRange(`${dateRange}_to_${val}`);
+                    } else {
+                      setDateRange(`${val}_to_${val}`);
+                    }
+                  }}
+                  className={`px-2 py-1.5 rounded-lg text-sm font-semibold transition-all outline-none border cursor-pointer ${
+                    dateRange.includes("_to_") && dateRange.split("_to_")[0] !== dateRange.split("_to_")[1]
+                      ? "bg-blue-50 border-blue-200 text-blue-700"
+                      : "border-transparent text-gray-500 hover:bg-gray-50 bg-transparent"
+                  }`}
+                  title="End Date"
+                  value={
+                    dateRange.includes("_to_") 
+                      ? dateRange.split("_to_")[1]
+                      : (!["today", "yesterday", "week"].includes(dateRange) ? dateRange : "")
+                  }
+                />
+              </div>
             </div>
           </div>
         </div>
