@@ -1,12 +1,13 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { Search, Download, Calendar, Globe, Loader2, LogOut, Clock } from "lucide-react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { Search, Download, Calendar, Globe, LogOut, Clock, MoreHorizontal, Shield } from "lucide-react";
 import type { EmployeeData, SessionData } from "./types";
-import { exportToCSV, exportDailyReportToCSV } from "./utils";
+import { exportToCSV, exportDailyReportToCSV, parseTimeToSeconds } from "./utils";
 import StatCards from "./components/StatCards";
 import EditProfileModal from "./components/EditProfileModal";
 import WebHistoryModal, { type WebLog } from "./components/WebHistoryModal";
 import LoginScreen from "./components/LoginScreen";
 import TimeLogModal from "./components/TimeLogModal";
+import SecurityAlertModal from "./components/SecurityAlertModal";
 
 const API_BASE = "https://voadera-analytics-api.onrender.com";
 
@@ -28,6 +29,10 @@ export default function App() {
   const [timeLogs, setTimeLogs] = useState<SessionData[]>([]);
   const [loadingTimeLogsFor, setLoadingTimeLogsFor] = useState<number | null>(null);
   const [loadingReportFor, setLoadingReportFor] = useState<number | null>(null);
+
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [alertEmployee, setAlertEmployee] = useState<EmployeeData | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const [dateRange, setDateRange] = useState("today");
 
@@ -102,6 +107,19 @@ export default function App() {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    if (openMenuId) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [openMenuId]);
+
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -142,7 +160,15 @@ export default function App() {
 
   const handleSaveProfile = async (
     id: number,
-    data: { name: string; dept: string; idleLimit: number; forceLogoff: boolean }
+    data: {
+      name: string;
+      dept: string;
+      idleLimit: number;
+      forceLogoff: boolean;
+      inOfficeToday: boolean;
+      officeCheckInTime?: string;
+      officeCheckOutTime?: string;
+    }
   ) => {
     const res = await authFetch(`${API_BASE}/employees/${id}`, {
       method: "PATCH",
@@ -151,18 +177,26 @@ export default function App() {
         name: data.name, 
         department: data.dept,
         idleLimit: data.idleLimit,
-        forceLogoff: data.forceLogoff 
+        forceLogoff: data.forceLogoff,
+        inOfficeToday: data.inOfficeToday,
+        officeCheckInTime: data.officeCheckInTime,
+        officeCheckOutTime: data.officeCheckOutTime,
       }),
     });
     if (!res.ok) throw new Error("Failed to update");
 
-    setEmployees((prev) =>
-      prev.map((emp) =>
-        emp.id === id
-          ? { ...emp, name: data.name, department: data.dept, idleLimit: data.idleLimit, forceLogoff: data.forceLogoff }
-          : emp
-      )
-    );
+    // Re-fetch employees so the updated active hours and office status are accurately calculated
+    const { start, end } = getDates(dateRange);
+    try {
+      const refreshRes = await authFetch(`${API_BASE}/employees?start=${start}&end=${end}`);
+      if (refreshRes.ok) {
+        const refreshedData = await refreshRes.json();
+        if (Array.isArray(refreshedData)) setEmployees(refreshedData);
+      }
+    } catch (err) {
+      console.error("Failed to refresh employee list:", err);
+    }
+
     setEditingEmployee(null);
   };
 
@@ -397,27 +431,15 @@ export default function App() {
               <thead>
                 <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest border-b border-gray-100">
                   <th className="px-6 py-4 font-semibold">Employee</th>
-                  <th className="px-6 py-4 font-semibold">Dept.</th>
-                  <th className="px-6 py-4 font-semibold">Logged In</th>
-                  <th className="px-6 py-4 font-semibold text-green-700">
-                    Active Time
-                  </th>
-                  <th className="px-6 py-4 font-semibold text-red-600">
-                    Total Idle
-                  </th>
-                  <th className="px-6 py-4 font-semibold text-orange-600">
-                    Peak Break
-                  </th>
-                  <th className="px-6 py-4 font-semibold text-right">
-                    Actions
-                  </th>
+                  <th className="px-6 py-4 font-semibold">Activity</th>
+                  <th className="px-6 py-4 font-semibold text-right w-20">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredEmployees.length === 0 && !loading ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={3}
                       className="px-6 py-16 text-center text-gray-400"
                     >
                       <p className="text-lg font-semibold">No data found</p>
@@ -429,87 +451,185 @@ export default function App() {
                     </td>
                   </tr>
                 ) : (
-                  filteredEmployees.map((emp) => (
-                    <tr
-                      key={emp.id}
-                      className="hover:bg-blue-50/30 transition-colors group"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
-                          <span className="font-bold text-gray-800">
-                            {emp.name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs font-medium uppercase tracking-tighter">
-                          {emp.department}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500">
-                        {emp.totalTime}
-                      </td>
-                      <td className="px-6 py-4 text-green-600 font-bold">
-                        {emp.activeTime}
-                      </td>
-                      <td className="px-6 py-4 text-red-500 font-medium">
-                        {emp.idleTime}
-                      </td>
-                      <td className="px-6 py-4 text-orange-600 font-medium">
-                        {emp.longestIdle}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleViewWebLogs(emp)}
-                            className="px-3 py-1 text-purple-600 hover:bg-purple-100 rounded-lg transition-all text-xs font-bold uppercase tracking-wider border border-transparent hover:border-purple-200 flex items-center gap-1.5 disabled:opacity-50"
-                            title={emp.windowsId ? "View web activity logs" : "No Windows ID linked"}
-                            disabled={!emp.windowsId || loadingWebLogsFor === emp.id}
-                          >
-                            {loadingWebLogsFor === emp.id ? (
-                              <Loader2 size={13} className="animate-spin" />
-                            ) : (
-                              <Globe size={13} />
+                  filteredEmployees.map((emp) => {
+                    const activeSeconds = parseTimeToSeconds(emp.activeTime);
+                    const totalSeconds = parseTimeToSeconds(emp.totalTime);
+                    const activePct = totalSeconds > 0 ? Math.round((activeSeconds / totalSeconds) * 100) : 0;
+                    const hasAlerts = (emp.securityAlerts?.length ?? 0) > 0;
+
+                    // Determine highest severity for badge
+                    let highestSeverity = "LOW";
+                    if (hasAlerts) {
+                      const sevOrder = ["HIGH", "MEDIUM", "LOW"];
+                      for (const lvl of sevOrder) {
+                        if (emp.securityAlerts!.some(a => (a.severity || "").toUpperCase() === lvl)) {
+                          highestSeverity = lvl;
+                          break;
+                        }
+                      }
+                    }
+
+                    const severityBadgeClasses: Record<string, string> = {
+                      HIGH: "bg-red-100 text-red-700 border-red-200 hover:bg-red-200",
+                      MEDIUM: "bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200",
+                      LOW: "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200",
+                    };
+
+                    return (
+                      <tr
+                        key={emp.id}
+                        className="hover:bg-blue-50/30 transition-colors group"
+                      >
+                        {/* Column 1 — Employee */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                emp.isOnline !== false
+                                  ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"
+                                  : "bg-gray-300"
+                              }`}
+                            />
+                            <span className="font-bold text-gray-800">
+                              {emp.name}
+                            </span>
+                            {hasAlerts && (
+                              <button
+                                onClick={() => setAlertEmployee(emp)}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-colors cursor-pointer ${severityBadgeClasses[highestSeverity]}`}
+                              >
+                                <Shield size={10} />
+                                Flagged: {highestSeverity}
+                              </button>
                             )}
-                            {loadingWebLogsFor === emp.id ? "Loading..." : "Web Logs"}
-                          </button>
-                          <button
-                            onClick={() => handleViewTimeLog(emp)}
-                            className="px-3 py-1 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all text-xs font-bold uppercase tracking-wider border border-transparent hover:border-emerald-200 flex items-center gap-1.5 disabled:opacity-50"
-                            title="View login and logout times"
-                            disabled={loadingTimeLogsFor === emp.id}
-                          >
-                            {loadingTimeLogsFor === emp.id ? (
-                              <Loader2 size={13} className="animate-spin" />
-                            ) : (
-                              <Clock size={13} />
+                          </div>
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md text-[11px] font-medium uppercase tracking-tighter">
+                              {emp.department}
+                            </span>
+                            {emp.inOfficeToday && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-700 border border-blue-200/80"
+                                title={`Check-in: ${emp.officeCheckInTime ? new Date(emp.officeCheckInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Today'}`}
+                              >
+                                🏢 At Office
+                              </span>
                             )}
-                            {loadingTimeLogsFor === emp.id ? "Loading..." : "Time Log"}
-                          </button>
-                          <button
-                            onClick={() => handleDownloadEmployeeReport(emp)}
-                            className="px-3 py-1 text-slate-600 hover:bg-slate-100 rounded-lg transition-all text-xs font-bold uppercase tracking-wider border border-transparent hover:border-slate-200 flex items-center gap-1.5 disabled:opacity-50"
-                            title="Download daily CSV report"
-                            disabled={loadingReportFor === emp.id}
-                          >
-                            {loadingReportFor === emp.id ? (
-                              <Loader2 size={13} className="animate-spin" />
-                            ) : (
-                              <Download size={13} />
+                          </div>
+                        </td>
+
+                        {/* Column 2 — Activity */}
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-gray-700">
+                            <span className="font-semibold text-green-600">{emp.activeTime}</span>
+                            <span className="text-gray-400 mx-1">active ·</span>
+                            <span className="font-medium text-red-500">{emp.idleTime}</span>
+                            <span className="text-gray-400 mx-1">idle ·</span>
+                            <span className="font-medium text-orange-500">{emp.longestIdle}</span>
+                            <span className="text-gray-400 ml-1">peak</span>
+                          </p>
+                          <div className="mt-2 h-1.5 w-full max-w-xs rounded-full bg-gray-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${activePct}%`,
+                                background: activePct > 60
+                                  ? "linear-gradient(90deg, #22c55e, #16a34a)"
+                                  : activePct > 30
+                                  ? "linear-gradient(90deg, #eab308, #f59e0b)"
+                                  : "linear-gradient(90deg, #ef4444, #dc2626)",
+                              }}
+                            />
+                          </div>
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            Logged in: {emp.totalTime}
+                          </p>
+                        </td>
+
+                        {/* Column 3 — Actions */}
+                        <td className="px-6 py-4 text-right">
+                          <div className="relative inline-block" ref={openMenuId === String(emp.id) ? menuRef : undefined}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(openMenuId === String(emp.id) ? null : String(emp.id));
+                              }}
+                              className="p-2 hover:bg-gray-100 rounded-lg transition-all text-gray-400 hover:text-gray-700"
+                              title="Actions"
+                            >
+                              <MoreHorizontal size={18} />
+                            </button>
+
+                            {openMenuId === String(emp.id) && (
+                              <div
+                                className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-50 animate-[scaleIn_0.15s_ease-out]"
+                                style={{ transformOrigin: "top right" }}
+                              >
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    handleViewWebLogs(emp);
+                                  }}
+                                  disabled={!emp.windowsId || loadingWebLogsFor === emp.id}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  <Globe size={15} className="text-purple-500" />
+                                  {loadingWebLogsFor === emp.id ? "Loading..." : "View Web Logs"}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    handleViewTimeLog(emp);
+                                  }}
+                                  disabled={loadingTimeLogsFor === emp.id}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  <Clock size={15} className="text-emerald-500" />
+                                  {loadingTimeLogsFor === emp.id ? "Loading..." : "View Time Log"}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    handleDownloadEmployeeReport(emp);
+                                  }}
+                                  disabled={loadingReportFor === emp.id}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  <Download size={15} className="text-slate-500" />
+                                  {loadingReportFor === emp.id ? "Loading..." : "Download Report"}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    setEditingEmployee(emp);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                  <span className="text-[15px] w-[15px] text-center leading-none">✏️</span>
+                                  Edit Profile
+                                </button>
+                                {hasAlerts && (
+                                  <>
+                                    <div className="my-1 border-t border-gray-100" />
+                                    <button
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        setAlertEmployee(emp);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-semibold"
+                                    >
+                                      <Shield size={15} className="text-red-500" />
+                                      View Security Alerts
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             )}
-                            {loadingReportFor === emp.id ? "Loading..." : "Report"}
-                          </button>
-                          <button
-                            onClick={() => setEditingEmployee(emp)}
-                            className="px-3 py-1 text-blue-600 hover:bg-blue-100 rounded-lg transition-all text-xs font-bold uppercase tracking-wider border border-transparent hover:border-blue-200"
-                          >
-                            Edit Profile
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -549,6 +669,15 @@ export default function App() {
             setTimeLogEmployee(null);
             setTimeLogs([]);
           }}
+        />
+      )}
+
+      {/* Security Alert Modal */}
+      {alertEmployee && alertEmployee.securityAlerts && (
+        <SecurityAlertModal
+          employeeName={alertEmployee.name}
+          alerts={alertEmployee.securityAlerts}
+          onClose={() => setAlertEmployee(null)}
         />
       )}
     </div>

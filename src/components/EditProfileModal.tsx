@@ -1,11 +1,22 @@
 import { useState } from "react";
-import { X, Save, User } from "lucide-react";
+import { X, Save, User, Building2, Clock } from "lucide-react";
 import type { EmployeeData } from "../types";
 
 interface Props {
   employee: EmployeeData;
   onClose: () => void;
-  onSave: (id: number, data: { name: string; dept: string; idleLimit: number; forceLogoff: boolean }) => Promise<void>;
+  onSave: (
+    id: number,
+    data: {
+      name: string;
+      dept: string;
+      idleLimit: number;
+      forceLogoff: boolean;
+      inOfficeToday: boolean;
+      officeCheckInTime?: string;
+      officeCheckOutTime?: string;
+    }
+  ) => Promise<void>;
 }
 
 export default function EditProfileModal({ employee, onClose, onSave }: Props) {
@@ -13,12 +24,42 @@ export default function EditProfileModal({ employee, onClose, onSave }: Props) {
   const [dept, setDept] = useState(employee.department);
   const [idleLimit, setIdleLimit] = useState(employee.idleLimit);
   const [forceLogoff, setForceLogoff] = useState(employee.forceLogoff);
+  const [inOfficeToday, setInOfficeToday] = useState<boolean>(!!employee.inOfficeToday);
+  const [checkInTimeStr, setCheckInTimeStr] = useState<string>(() => {
+    if (employee.officeCheckInTime) {
+      const d = new Date(employee.officeCheckInTime);
+      return d.toTimeString().slice(0, 5);
+    }
+    return new Date().toTimeString().slice(0, 5);
+  });
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await onSave(employee.id, { name, dept, idleLimit, forceLogoff });
+
+    let officeCheckInTime: string | undefined = undefined;
+    let officeCheckOutTime: string | undefined = undefined;
+
+    if (inOfficeToday) {
+      const [hours, minutes] = checkInTimeStr.split(":").map(Number);
+      const d = new Date();
+      d.setHours(hours || 0, minutes || 0, 0, 0);
+      officeCheckInTime = d.toISOString();
+    } else if (employee.inOfficeToday && !inOfficeToday) {
+      // Early uncheck: record check-out time right now!
+      officeCheckOutTime = new Date().toISOString();
+    }
+
+    await onSave(employee.id, {
+      name,
+      dept,
+      idleLimit,
+      forceLogoff,
+      inOfficeToday,
+      officeCheckInTime,
+      officeCheckOutTime,
+    });
     setSaving(false);
   };
 
@@ -42,7 +83,7 @@ export default function EditProfileModal({ employee, onClose, onSave }: Props) {
               <User size={20} className="text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Edit Profile</h2>
+              <h2 className="text-lg font-bold text-gray-900">Edit Profile & Status</h2>
               <p className="text-xs text-gray-400 font-mono">
                 {employee.windowsId || `ID #${employee.id}`}
               </p>
@@ -94,6 +135,49 @@ export default function EditProfileModal({ employee, onClose, onSave }: Props) {
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-gray-800"
               placeholder="e.g. 900 for 15 mins"
             />
+          </div>
+
+          <div className="bg-blue-50/70 p-4 rounded-xl border border-blue-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                  <Building2 size={18} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-blue-900">At Office Today</p>
+                  <p className="text-xs text-blue-600">Unlimited idle until 5:00 PM today</p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={inOfficeToday}
+                  onChange={(e) => setInOfficeToday(e.target.checked)}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            {inOfficeToday && (
+              <div className="pt-3 border-t border-blue-200/60 flex flex-col gap-2 animate-[fadeIn_0.2s_ease-out]">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                    <Clock size={13} className="text-blue-600" />
+                    Check-In Time (Backdate):
+                  </label>
+                  <input
+                    type="time"
+                    value={checkInTimeStr}
+                    onChange={(e) => setCheckInTimeStr(e.target.value)}
+                    className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-semibold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                  />
+                </div>
+                <p className="text-[11px] text-blue-700 leading-relaxed">
+                  ⚡ Hours will be recorded automatically at 100% active from check-in until 5:00 PM. Unchecking early reverts immediately to normal tracking.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between bg-red-50 p-4 rounded-xl border border-red-100">
