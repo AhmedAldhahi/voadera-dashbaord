@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { Search, Download, Calendar, Globe, LogOut, Clock, MoreHorizontal, Shield } from "lucide-react";
+import { Search, Download, Calendar, Globe, LogOut, Clock, MoreHorizontal, Shield, Building2 } from "lucide-react";
 import type { EmployeeData, SessionData } from "./types";
 import { exportToCSV, exportDailyReportToCSV, parseTimeToSeconds } from "./utils";
 import StatCards from "./components/StatCards";
@@ -184,6 +184,24 @@ export default function App() {
       }),
     });
     if (!res.ok) throw new Error("Failed to update");
+
+    // Optimistically update local employee state immediately
+    setEmployees((prev) =>
+      prev.map((emp) =>
+        emp.id === id
+          ? {
+              ...emp,
+              name: data.name,
+              department: data.dept,
+              idleLimit: data.idleLimit,
+              forceLogoff: data.forceLogoff,
+              inOfficeToday: data.inOfficeToday,
+              officeCheckInTime: data.officeCheckInTime ?? emp.officeCheckInTime,
+              officeCheckOutTime: data.officeCheckOutTime ?? emp.officeCheckOutTime,
+            }
+          : emp
+      )
+    );
 
     // Re-fetch employees so the updated active hours and office status are accurately calculated
     const { start, end } = getDates(dateRange);
@@ -493,6 +511,15 @@ export default function App() {
                             <span className="font-bold text-gray-800">
                               {emp.name}
                             </span>
+                            {emp.inOfficeToday && (
+                              <span
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 animate-[fadeIn_0.2s_ease-out]"
+                                title={`Check-in: ${emp.officeCheckInTime ? new Date(emp.officeCheckInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Today'}`}
+                              >
+                                <Building2 size={13} className="text-blue-100 animate-pulse" />
+                                <span>At Office</span>
+                              </span>
+                            )}
                             {hasAlerts && (
                               <button
                                 onClick={() => setAlertEmployee(emp)}
@@ -507,14 +534,6 @@ export default function App() {
                             <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md text-[11px] font-medium uppercase tracking-tighter">
                               {emp.department}
                             </span>
-                            {emp.inOfficeToday && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-700 border border-blue-200/80"
-                                title={`Check-in: ${emp.officeCheckInTime ? new Date(emp.officeCheckInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Today'}`}
-                              >
-                                🏢 At Office
-                              </span>
-                            )}
                           </div>
                         </td>
 
@@ -533,7 +552,9 @@ export default function App() {
                               className="h-full rounded-full transition-all duration-500"
                               style={{
                                 width: `${activePct}%`,
-                                background: activePct > 60
+                                background: emp.inOfficeToday
+                                  ? "linear-gradient(90deg, #3b82f6, #4f46e5)"
+                                  : activePct > 60
                                   ? "linear-gradient(90deg, #22c55e, #16a34a)"
                                   : activePct > 30
                                   ? "linear-gradient(90deg, #eab308, #f59e0b)"
@@ -542,7 +563,7 @@ export default function App() {
                             />
                           </div>
                           <p className="text-[11px] text-gray-400 mt-1">
-                            Logged in: {emp.totalTime}
+                            Logged in: {emp.totalTime} {emp.inOfficeToday && <span className="text-blue-600 font-semibold ml-1">· In-Office Mode Active</span>}
                           </p>
                         </td>
 
