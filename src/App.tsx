@@ -474,6 +474,7 @@ export default function App() {
                     const totalSeconds = parseTimeToSeconds(emp.totalTime);
                     const activePct = totalSeconds > 0 ? Math.round((activeSeconds / totalSeconds) * 100) : 0;
                     const hasAlerts = (emp.securityAlerts?.length ?? 0) > 0;
+                    const isOfficeActiveForRange = emp.inOfficeToday && dateRange === "today";
 
                     // Determine highest severity for badge
                     let highestSeverity = "LOW";
@@ -511,7 +512,7 @@ export default function App() {
                             <span className="font-bold text-gray-800">
                               {emp.name}
                             </span>
-                            {emp.inOfficeToday && (
+                            {isOfficeActiveForRange && (
                               <span
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 animate-[fadeIn_0.2s_ease-out]"
                                 title={`Check-in: ${emp.officeCheckInTime ? new Date(emp.officeCheckInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Today'}`}
@@ -552,7 +553,7 @@ export default function App() {
                               className="h-full rounded-full transition-all duration-500"
                               style={{
                                 width: `${activePct}%`,
-                                background: emp.inOfficeToday
+                                background: isOfficeActiveForRange
                                   ? "linear-gradient(90deg, #3b82f6, #4f46e5)"
                                   : activePct > 60
                                   ? "linear-gradient(90deg, #22c55e, #16a34a)"
@@ -563,7 +564,7 @@ export default function App() {
                             />
                           </div>
                           <p className="text-[11px] text-gray-400 mt-1">
-                            Logged in: {emp.totalTime} {emp.inOfficeToday && <span className="text-blue-600 font-semibold ml-1">· In-Office Mode Active</span>}
+                            Logged in: {emp.totalTime} {isOfficeActiveForRange && <span className="text-blue-600 font-semibold ml-1">· In-Office Mode Active</span>}
                           </p>
                         </td>
 
