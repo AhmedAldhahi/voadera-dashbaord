@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { Search, Download, Calendar, Globe, LogOut, Clock, MoreHorizontal, Shield, Building2 } from "lucide-react";
+import { Search, Download, Calendar, Globe, LogOut, Clock, MoreHorizontal, Shield, Building2, Loader2 } from "lucide-react";
 import type { EmployeeData, SessionData } from "./types";
 import { exportToCSV, exportDailyReportToCSV, parseTimeToSeconds } from "./utils";
 import StatCards from "./components/StatCards";
@@ -32,6 +32,7 @@ export default function App() {
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [alertEmployee, setAlertEmployee] = useState<EmployeeData | null>(null);
+  const [togglingOfficeFor, setTogglingOfficeFor] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [dateRange, setDateRange] = useState("today");
@@ -157,6 +158,42 @@ export default function App() {
         (emp.department || "").toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [employees, searchQuery]);
+
+  // Quick inline toggle for At Office — no modal needed
+  const handleToggleOffice = async (emp: EmployeeData) => {
+    const newValue = !emp.inOfficeToday;
+    setTogglingOfficeFor(emp.id);
+    try {
+      const payload: any = { inOfficeToday: newValue };
+      if (newValue) {
+        payload.officeCheckInTime = new Date().toISOString();
+      } else {
+        payload.officeCheckOutTime = new Date().toISOString();
+      }
+      const res = await authFetch(`${API_BASE}/employees/${emp.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to toggle office status");
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === emp.id
+            ? {
+                ...e,
+                inOfficeToday: newValue,
+                officeCheckInTime: newValue ? payload.officeCheckInTime : e.officeCheckInTime,
+                officeCheckOutTime: newValue ? null : payload.officeCheckOutTime,
+              }
+            : e
+        )
+      );
+    } catch (err) {
+      console.error("Failed to toggle office:", err);
+    } finally {
+      setTogglingOfficeFor(null);
+    }
+  };
 
   const handleSaveProfile = async (
     id: number,
@@ -474,7 +511,18 @@ export default function App() {
                     const totalSeconds = parseTimeToSeconds(emp.totalTime);
                     const activePct = totalSeconds > 0 ? Math.round((activeSeconds / totalSeconds) * 100) : 0;
                     const hasAlerts = (emp.securityAlerts?.length ?? 0) > 0;
-                    const isOfficeActiveForRange = emp.inOfficeToday && dateRange === "today";
+                    // Check if the check-in is actually from today (fixes stale badge persisting to next day)
+                    const isOfficeActiveForRange = (() => {
+                      if (!emp.inOfficeToday) return false;
+                      if (!emp.officeCheckInTime) return false;
+                      const checkInDate = new Date(emp.officeCheckInTime);
+                      const today = new Date();
+                      return (
+                        checkInDate.getFullYear() === today.getFullYear() &&
+                        checkInDate.getMonth() === today.getMonth() &&
+                        checkInDate.getDate() === today.getDate()
+                      );
+                    })();
 
                     // Determine highest severity for badge
                     let highestSeverity = "LOW";
@@ -535,6 +583,33 @@ export default function App() {
                             <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md text-[11px] font-medium uppercase tracking-tighter">
                               {emp.department}
                             </span>
+
+                            {/* Inline At Office Toggle */}
+                            <div className="flex items-center gap-1.5 ml-1">
+                              <label
+                                className={`relative inline-flex items-center cursor-pointer ${
+                                  togglingOfficeFor === emp.id ? 'opacity-50 pointer-events-none' : ''
+                                }`}
+                                title={isOfficeActiveForRange ? 'Uncheck to end office mode' : 'Mark as At Office'}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="sr-only peer"
+                                  checked={isOfficeActiveForRange}
+                                  onChange={() => handleToggleOffice(emp)}
+                                />
+                                <div className="w-8 h-[18px] bg-gray-200 rounded-full peer peer-checked:bg-blue-600 peer-checked:after:translate-x-[14px] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-[14px] after:w-[14px] after:transition-all after:shadow-sm transition-colors" />
+                              </label>
+                              {togglingOfficeFor === emp.id ? (
+                                <Loader2 size={11} className="animate-spin text-blue-500" />
+                              ) : (
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                  isOfficeActiveForRange ? 'text-blue-600' : 'text-gray-400'
+                                }`}>
+                                  {isOfficeActiveForRange ? 'In Office' : 'Office'}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
 
