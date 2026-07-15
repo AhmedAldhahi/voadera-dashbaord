@@ -160,13 +160,20 @@ export default function App() {
   }, [employees, searchQuery]);
 
   // Quick inline toggle for At Office — no modal needed
-  const handleToggleOffice = async (emp: EmployeeData) => {
+  const handleToggleOffice = async (emp: EmployeeData, checkInTimeStr?: string) => {
     const newValue = !emp.inOfficeToday;
     setTogglingOfficeFor(emp.id);
     try {
       const payload: any = { inOfficeToday: newValue };
       if (newValue) {
-        payload.officeCheckInTime = new Date().toISOString();
+        if (checkInTimeStr) {
+          const [hours, minutes] = checkInTimeStr.split(":").map(Number);
+          const d = new Date();
+          d.setHours(hours || 0, minutes || 0, 0, 0);
+          payload.officeCheckInTime = d.toISOString();
+        } else {
+          payload.officeCheckInTime = new Date().toISOString();
+        }
       } else {
         payload.officeCheckOutTime = new Date().toISOString();
       }
@@ -192,6 +199,29 @@ export default function App() {
       console.error("Failed to toggle office:", err);
     } finally {
       setTogglingOfficeFor(null);
+    }
+  };
+
+  // Update check-in time for an already-active office session
+  const handleUpdateOfficeTime = async (emp: EmployeeData, timeStr: string) => {
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    const d = new Date();
+    d.setHours(hours || 0, minutes || 0, 0, 0);
+    const checkInTime = d.toISOString();
+    try {
+      const res = await authFetch(`${API_BASE}/employees/${emp.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inOfficeToday: true, officeCheckInTime: checkInTime }),
+      });
+      if (!res.ok) throw new Error("Failed to update office time");
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === emp.id ? { ...e, officeCheckInTime: checkInTime } : e
+        )
+      );
+    } catch (err) {
+      console.error("Failed to update office time:", err);
     }
   };
 
@@ -608,6 +638,21 @@ export default function App() {
                                 }`}>
                                   {isOfficeActiveForRange ? 'In Office' : 'Office'}
                                 </span>
+                              )}
+                              {isOfficeActiveForRange && (
+                                <input
+                                  type="time"
+                                  className="px-1.5 py-0.5 bg-blue-50 border border-blue-200 rounded-md text-[11px] font-semibold text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-400 w-[80px] cursor-pointer"
+                                  title="Change check-in time"
+                                  value={
+                                    emp.officeCheckInTime
+                                      ? new Date(emp.officeCheckInTime).toTimeString().slice(0, 5)
+                                      : new Date().toTimeString().slice(0, 5)
+                                  }
+                                  onChange={(e) => {
+                                    if (e.target.value) handleUpdateOfficeTime(emp, e.target.value);
+                                  }}
+                                />
                               )}
                             </div>
                           </div>
