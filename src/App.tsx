@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Search, Download, Calendar, Globe, LogOut, Clock, MoreHorizontal, Shield, Building2, Loader2 } from "lucide-react";
 import type { EmployeeData, SessionData } from "./types";
-import { exportToCSV, exportDailyReportToCSV, parseTimeToSeconds } from "./utils";
+import { exportToCSV, exportDailyReportToCSV, parseTimeToSeconds, isOfficeActiveToday } from "./utils";
 import StatCards from "./components/StatCards";
 import EditProfileModal from "./components/EditProfileModal";
 import WebHistoryModal, { type WebLog } from "./components/WebHistoryModal";
@@ -159,9 +159,23 @@ export default function App() {
     );
   }, [employees, searchQuery]);
 
+  const refreshEmployeesList = useCallback(async () => {
+    const { start, end } = getDates(dateRange);
+    try {
+      const refreshRes = await authFetch(`${API_BASE}/employees?start=${start}&end=${end}`);
+      if (refreshRes.ok) {
+        const refreshedData = await refreshRes.json();
+        if (Array.isArray(refreshedData)) setEmployees(refreshedData);
+      }
+    } catch (err) {
+      console.error("Failed to refresh employee list:", err);
+    }
+  }, [dateRange, authFetch]);
+
   // Quick inline toggle for At Office — no modal needed
   const handleToggleOffice = async (emp: EmployeeData, checkInTimeStr?: string) => {
-    const newValue = !emp.inOfficeToday;
+    const isCurrentlyActive = isOfficeActiveToday(emp);
+    const newValue = !isCurrentlyActive;
     setTogglingOfficeFor(emp.id);
     try {
       const payload: any = { inOfficeToday: newValue };
@@ -183,6 +197,7 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Failed to toggle office status");
+      
       setEmployees((prev) =>
         prev.map((e) =>
           e.id === emp.id
@@ -195,6 +210,9 @@ export default function App() {
             : e
         )
       );
+
+      // Immediately re-fetch from backend so the active time/hours fill up accurately
+      await refreshEmployeesList();
     } catch (err) {
       console.error("Failed to toggle office:", err);
     } finally {
@@ -208,6 +226,7 @@ export default function App() {
     const d = new Date();
     d.setHours(hours || 0, minutes || 0, 0, 0);
     const checkInTime = d.toISOString();
+    setTogglingOfficeFor(emp.id);
     try {
       const res = await authFetch(`${API_BASE}/employees/${emp.id}`, {
         method: "PATCH",
@@ -217,11 +236,15 @@ export default function App() {
       if (!res.ok) throw new Error("Failed to update office time");
       setEmployees((prev) =>
         prev.map((e) =>
-          e.id === emp.id ? { ...e, officeCheckInTime: checkInTime } : e
+          e.id === emp.id ? { ...e, inOfficeToday: true, officeCheckInTime: checkInTime } : e
         )
       );
+      // Immediately re-fetch from backend so the active time/hours fill up accurately
+      await refreshEmployeesList();
     } catch (err) {
       console.error("Failed to update office time:", err);
+    } finally {
+      setTogglingOfficeFor(null);
     }
   };
 
@@ -271,16 +294,7 @@ export default function App() {
     );
 
     // Re-fetch employees so the updated active hours and office status are accurately calculated
-    const { start, end } = getDates(dateRange);
-    try {
-      const refreshRes = await authFetch(`${API_BASE}/employees?start=${start}&end=${end}`);
-      if (refreshRes.ok) {
-        const refreshedData = await refreshRes.json();
-        if (Array.isArray(refreshedData)) setEmployees(refreshedData);
-      }
-    } catch (err) {
-      console.error("Failed to refresh employee list:", err);
-    }
+    await refreshEmployeesList();
 
     setEditingEmployee(null);
   };
@@ -541,18 +555,7 @@ export default function App() {
                     const totalSeconds = parseTimeToSeconds(emp.totalTime);
                     const activePct = totalSeconds > 0 ? Math.round((activeSeconds / totalSeconds) * 100) : 0;
                     const hasAlerts = (emp.securityAlerts?.length ?? 0) > 0;
-                    // Check if the check-in is actually from today (fixes stale badge persisting to next day)
-                    const isOfficeActiveForRange = (() => {
-                      if (!emp.inOfficeToday) return false;
-                      if (!emp.officeCheckInTime) return false;
-                      const checkInDate = new Date(emp.officeCheckInTime);
-                      const today = new Date();
-                      return (
-                        checkInDate.getFullYear() === today.getFullYear() &&
-                        checkInDate.getMonth() === today.getMonth() &&
-                        checkInDate.getDate() === today.getDate()
-                      );
-                    })();
+                    const isOfficeActiveForRange = isOfficeActiveToday(emp);
 
                     // Determine highest severity for badge
                     let highestSeverity = "LOW";

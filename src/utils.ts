@@ -20,6 +20,18 @@ export function formatSeconds(total: number): string {
   return `${h}h ${m}m ${s}s`;
 }
 
+export function isOfficeActiveToday(emp: { inOfficeToday?: boolean; officeCheckInTime?: string | null }): boolean {
+  if (!emp.inOfficeToday) return false;
+  if (!emp.officeCheckInTime) return false;
+  const checkInDate = new Date(emp.officeCheckInTime);
+  const today = new Date();
+  return (
+    checkInDate.getFullYear() === today.getFullYear() &&
+    checkInDate.getMonth() === today.getMonth() &&
+    checkInDate.getDate() === today.getDate()
+  );
+}
+
 export function exportToCSV(employees: EmployeeData[], dateRange: string) {
   const headers = ["Name", "Department", "Logged In", "Active Time", "Idle Time", "Peak Break"];
   const rows = employees.map((emp) => [

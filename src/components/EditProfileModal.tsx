@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Save, User, Building2, Clock } from "lucide-react";
 import type { EmployeeData } from "../types";
+import { isOfficeActiveToday } from "../utils";
 
 interface Props {
   employee: EmployeeData;
@@ -24,9 +25,9 @@ export default function EditProfileModal({ employee, onClose, onSave }: Props) {
   const [dept, setDept] = useState(employee.department);
   const [idleLimit, setIdleLimit] = useState(employee.idleLimit);
   const [forceLogoff, setForceLogoff] = useState(employee.forceLogoff);
-  const [inOfficeToday, setInOfficeToday] = useState<boolean>(!!employee.inOfficeToday);
+  const [inOfficeToday, setInOfficeToday] = useState<boolean>(isOfficeActiveToday(employee));
   const [checkInTimeStr, setCheckInTimeStr] = useState<string>(() => {
-    if (employee.officeCheckInTime) {
+    if (employee.officeCheckInTime && isOfficeActiveToday(employee)) {
       const d = new Date(employee.officeCheckInTime);
       return d.toTimeString().slice(0, 5);
     }
