@@ -664,12 +664,12 @@ export default function App() {
                         {/* Column 2 — Activity */}
                         <td className="px-6 py-4">
                           <p className="text-sm text-gray-700">
-                            <span className="font-semibold text-green-600">{emp.activeTime}</span>
+                            <span className="font-semibold text-gray-800">{emp.totalTime}</span>
+                            <span className="text-gray-400 mx-1">total ·</span>
+                            <span className="font-medium text-green-600">{emp.activeTime}</span>
                             <span className="text-gray-400 mx-1">active ·</span>
                             <span className="font-medium text-red-500">{emp.idleTime}</span>
-                            <span className="text-gray-400 mx-1">idle ·</span>
-                            <span className="font-medium text-orange-500">{emp.longestIdle}</span>
-                            <span className="text-gray-400 ml-1">peak</span>
+                            <span className="text-gray-400 ml-1">idle</span>
                           </p>
                           <div className="mt-2 h-1.5 w-full max-w-xs rounded-full bg-gray-100 overflow-hidden">
                             <div
@@ -687,7 +687,7 @@ export default function App() {
                             />
                           </div>
                           <p className="text-[11px] text-gray-400 mt-1">
-                            Logged in: {emp.totalTime} {isOfficeActiveForRange && <span className="text-blue-600 font-semibold ml-1">· In-Office Mode Active</span>}
+                            Peak break: {emp.longestIdle} {isOfficeActiveForRange && <span className="text-blue-600 font-semibold ml-1">· In-Office Mode Active</span>}
                           </p>
                         </td>
 
