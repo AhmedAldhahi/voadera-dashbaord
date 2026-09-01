@@ -748,18 +748,23 @@ export default function App() {
                                   <span className="text-[15px] w-[15px] text-center leading-none">✏️</span>
                                   Edit Profile
                                 </button>
-                                {hasAlerts && (
-                                  <button
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      setAlertEmployee(emp);
-                                    }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                  >
-                                    <Shield size={15} className="text-slate-400" />
-                                    Security Alerts
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    setAlertEmployee(emp);
+                                  }}
+                                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <Shield size={15} className={hasAlerts ? "text-amber-500" : "text-slate-400"} />
+                                    <span>Security Alerts</span>
+                                  </div>
+                                  {hasAlerts && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                      {emp.securityAlerts!.length}
+                                    </span>
+                                  )}
+                                </button>
                                 <div className="my-1 border-t border-gray-100" />
                                 <button
                                   onClick={() => {
@@ -821,10 +826,10 @@ export default function App() {
       )}
 
       {/* Security Alert Modal */}
-      {alertEmployee && alertEmployee.securityAlerts && (
+      {alertEmployee && (
         <SecurityAlertModal
           employeeName={alertEmployee.name}
-          alerts={alertEmployee.securityAlerts}
+          alerts={alertEmployee.securityAlerts || []}
           onClose={() => setAlertEmployee(null)}
         />
       )}

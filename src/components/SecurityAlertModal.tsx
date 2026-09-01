@@ -52,8 +52,17 @@ function formatTimestamp(ts: string): string {
 }
 
 export default function SecurityAlertModal({ employeeName, alerts, onClose }: Props) {
-  const topSeverity = getHighestSeverity(alerts);
-  const config = severityConfig[topSeverity] || severityConfig.MEDIUM;
+  const hasNoAlerts = !alerts || alerts.length === 0;
+  const topSeverity = getHighestSeverity(alerts || []);
+  const config = hasNoAlerts
+    ? {
+        bg: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+        border: "rgba(148,163,184,0.2)",
+        text: "text-emerald-400",
+        glow: "0 0 20px rgba(0,0,0,0.3)",
+        label: "Normal Activity",
+      }
+    : severityConfig[topSeverity] || severityConfig.MEDIUM;
 
   return (
     <div
@@ -86,7 +95,7 @@ export default function SecurityAlertModal({ employeeName, alerts, onClose }: Pr
                   Security Alerts — {employeeName}
                 </h2>
                 <p className="text-xs text-white/70 font-semibold">
-                  {alerts.length} alert{alerts.length !== 1 ? "s" : ""} • {config.label}
+                  {alerts?.length || 0} alert{alerts?.length !== 1 ? "s" : ""} • {config.label}
                 </p>
               </div>
             </div>
@@ -101,7 +110,18 @@ export default function SecurityAlertModal({ employeeName, alerts, onClose }: Pr
 
         {/* Alert List */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
-          {alerts.map((alert) => {
+          {hasNoAlerts ? (
+            <div className="py-12 text-center text-slate-400 flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-3 text-emerald-400">
+                <Shield size={24} />
+              </div>
+              <p className="text-sm font-semibold text-white">No Security Alerts</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                No anomalous activity or security flags recorded for this employee in the selected period.
+              </p>
+            </div>
+          ) : (
+            alerts.map((alert) => {
             const sev = (alert.severity || "MEDIUM").toUpperCase();
             const sevCfg = severityConfig[sev] || severityConfig.MEDIUM;
             const isJigglerSummary = alert.alertType === "JIGGLER_DAY_SUMMARY";
@@ -270,7 +290,8 @@ export default function SecurityAlertModal({ employeeName, alerts, onClose }: Pr
                 )}
               </div>
             );
-          })}
+          })
+        )}
         </div>
 
         {/* Footer */}
