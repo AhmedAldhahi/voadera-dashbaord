@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { Search, Download, Calendar, Globe, LogOut, Clock, MoreHorizontal, Shield, Building2, Loader2 } from "lucide-react";
+import { Search, Download, Calendar, Globe, LogOut, Clock, MoreHorizontal, Shield, Building2, Loader2, Trash2 } from "lucide-react";
 import type { EmployeeData, SessionData } from "./types";
 import { exportToCSV, exportDailyReportToCSV, parseTimeToSeconds, isOfficeActiveToday } from "./utils";
 import StatCards from "./components/StatCards";
@@ -174,7 +174,8 @@ export default function App() {
 
   // Quick inline toggle for At Office — no modal needed
   const handleToggleOffice = async (emp: EmployeeData, checkInTimeStr?: string) => {
-    const isCurrentlyActive = isOfficeActiveToday(emp);
+    const rangeStartDate = new Date(getDates(dateRange).start);
+    const isCurrentlyActive = isOfficeActiveToday(emp, rangeStartDate);
     const newValue = !isCurrentlyActive;
     setTogglingOfficeFor(emp.id);
     try {
@@ -359,6 +360,26 @@ export default function App() {
       alert("Failed to generate report. Please try again.");
     } finally {
       setLoadingReportFor(null);
+    }
+  };
+
+  const handleDeleteEmployee = async (emp: EmployeeData) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${emp.name}? This will permanently remove this employee from the dashboard.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await authFetch(`${API_BASE}/employees/${emp.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        throw new Error(`Server returned error ${res.status}`);
+      }
+      setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
+    } catch (err: any) {
+      console.error("Failed to delete employee:", err);
+      alert("Failed to delete employee. Please try again.");
     }
   };
 
@@ -553,27 +574,10 @@ export default function App() {
                   filteredEmployees.map((emp) => {
                     const activeSeconds = parseTimeToSeconds(emp.activeTime);
                     const totalSeconds = parseTimeToSeconds(emp.totalTime);
-                    const activePct = totalSeconds > 0 ? Math.round((activeSeconds / totalSeconds) * 100) : 0;
+                    const activePct = totalSeconds > 0 ? Math.min(100, Math.round((activeSeconds / totalSeconds) * 100)) : 0;
                     const hasAlerts = (emp.securityAlerts?.length ?? 0) > 0;
-                    const isOfficeActiveForRange = isOfficeActiveToday(emp);
-
-                    // Determine highest severity for badge
-                    let highestSeverity = "LOW";
-                    if (hasAlerts) {
-                      const sevOrder = ["HIGH", "MEDIUM", "LOW"];
-                      for (const lvl of sevOrder) {
-                        if (emp.securityAlerts!.some(a => (a.severity || "").toUpperCase() === lvl)) {
-                          highestSeverity = lvl;
-                          break;
-                        }
-                      }
-                    }
-
-                    const severityBadgeClasses: Record<string, string> = {
-                      HIGH: "bg-red-100 text-red-700 border-red-200 hover:bg-red-200",
-                      MEDIUM: "bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200",
-                      LOW: "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200",
-                    };
+                    const rangeStartDate = new Date(getDates(dateRange).start);
+                    const isOfficeActiveForRange = isOfficeActiveToday(emp, rangeStartDate);
 
                     return (
                       <tr
@@ -601,15 +605,6 @@ export default function App() {
                                 <Building2 size={13} className="text-blue-100 animate-pulse" />
                                 <span>At Office</span>
                               </span>
-                            )}
-                            {hasAlerts && (
-                              <button
-                                onClick={() => setAlertEmployee(emp)}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-colors cursor-pointer ${severityBadgeClasses[highestSeverity]}`}
-                              >
-                                <Shield size={10} />
-                                Flagged: {highestSeverity}
-                              </button>
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -754,20 +749,28 @@ export default function App() {
                                   Edit Profile
                                 </button>
                                 {hasAlerts && (
-                                  <>
-                                    <div className="my-1 border-t border-gray-100" />
-                                    <button
-                                      onClick={() => {
-                                        setOpenMenuId(null);
-                                        setAlertEmployee(emp);
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-semibold"
-                                    >
-                                      <Shield size={15} className="text-red-500" />
-                                      View Security Alerts
-                                    </button>
-                                  </>
+                                  <button
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      setAlertEmployee(emp);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <Shield size={15} className="text-slate-400" />
+                                    Security Alerts
+                                  </button>
                                 )}
+                                <div className="my-1 border-t border-gray-100" />
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    handleDeleteEmployee(emp);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium"
+                                >
+                                  <Trash2 size={15} className="text-red-500" />
+                                  Delete Employee
+                                </button>
                               </div>
                             )}
                           </div>

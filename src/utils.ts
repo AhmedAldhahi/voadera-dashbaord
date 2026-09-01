@@ -20,15 +20,15 @@ export function formatSeconds(total: number): string {
   return `${h}h ${m}m ${s}s`;
 }
 
-export function isOfficeActiveToday(emp: { inOfficeToday?: boolean; officeCheckInTime?: string | null }): boolean {
+export function isOfficeActiveToday(emp: { inOfficeToday?: boolean; officeCheckInTime?: string | null }, referenceDate?: Date): boolean {
   if (!emp.inOfficeToday) return false;
   if (!emp.officeCheckInTime) return false;
   const checkInDate = new Date(emp.officeCheckInTime);
-  const today = new Date();
+  const compareDate = referenceDate || new Date();
   return (
-    checkInDate.getFullYear() === today.getFullYear() &&
-    checkInDate.getMonth() === today.getMonth() &&
-    checkInDate.getDate() === today.getDate()
+    checkInDate.getFullYear() === compareDate.getFullYear() &&
+    checkInDate.getMonth() === compareDate.getMonth() &&
+    checkInDate.getDate() === compareDate.getDate()
   );
 }
 
